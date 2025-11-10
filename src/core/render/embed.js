@@ -4,6 +4,35 @@ import { merge } from '../util/core';
 
 const cached = {};
 
+/**
+ * Extracts the content between matching fragment markers in the text.
+ *
+ * Supported markers:
+ * - ### [fragment] ... ### [fragment]
+ * - /// [fragment] ... /// [fragment]
+ *
+ * @param {string} text - The input text that may contain embedded fragments.
+ * @param {string} fragment - The fragment identifier to search for.
+ * @param {boolean} fullLine - The fragment identifier to search for.
+ * @returns {string} - The extracted and demented content, or an empty string if not found.
+ */
+function extractFragmentContent(text, fragment, fullLine) {
+  if (!fragment) {
+    return text;
+  }
+  let fragmentRegex = `###|\\/\\/\\/)\\s*\\[${fragment}\\]`;
+  const contentRegex = `[\\s\\S]*?`;
+  if (fullLine) {
+    // Match full line for fragment
+    fragmentRegex = `.*${fragmentRegex}.*\n`;
+  }
+  const pattern = new RegExp(
+    `(?:${fragmentRegex})(${contentRegex})(?:${fragmentRegex})`,
+  ); // content is the capture group
+  const match = text.match(pattern);
+  return stripIndent((match || [])[1] || '').trim();
+}
+
 function walkFetchEmbed({ embedTokens, compile, fetch }, cb) {
   let token;
   let step = 0;
@@ -70,6 +99,43 @@ function walkFetchEmbed({ embedTokens, compile, fetch }, cb) {
             embedToken = [{ type: 'html', text }];
             embedToken.links = {};
           }
+
+          if (currentToken.embed.fragment) {
+            text = extractFragmentContent(
+              text,
+              currentToken.embed.fragment,
+              currentToken.embed.fragmentFullLine,
+            );
+          }
+
+          embedToken = compile.lexer(text);
+        } else if (currentToken.embed.type === 'code') {
+          if (currentToken.embed.fragment) {
+            text = extractFragmentContent(
+              text,
+              currentToken.embed.fragment,
+              currentToken.embed.fragmentFullLine,
+            );
+          }
+
+          embedToken = compile.lexer(
+            '```' +
+              currentToken.embed.lang +
+              '\n' +
+              text.replace(/`/g, '@DOCSIFY_QM@') +
+              '\n```\n',
+          );
+        } else if (currentToken.embed.type === 'mermaid') {
+          embedToken = [
+            {
+              type: 'html',
+              text: /* html */ `<div class="mermaid">\n${text}\n</div>`,
+            },
+          ];
+          embedToken.links = {};
+        } else {
+          embedToken = [{ type: 'html', text }];
+          embedToken.links = {};
         }
 
         cb({ token, embedToken });

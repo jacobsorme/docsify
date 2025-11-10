@@ -174,6 +174,7 @@ export class Compiler {
       }
 
       embed.fragment = config.fragment;
+      embed.fragmentFullLine = config.fragmentFullLine;
 
       return embed;
     }
